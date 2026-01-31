@@ -1,0 +1,223 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* TerraNova Premium Agritech Design System */
+    --background: 40 10% 96%;
+    --foreground: 161 89% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 161 89% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 161 89% 10%;
+
+    /* Deep Forest Green */
+    --primary: 161 89% 17%;
+    --primary-foreground: 40 10% 98%;
+
+    /* Warm Sand */
+    --secondary: 40 10% 92%;
+    --secondary-foreground: 161 89% 17%;
+
+    --muted: 40 10% 90%;
+    --muted-foreground: 161 30% 40%;
+
+    /* Neon Green Accent */
+    --accent: 158 65% 52%;
+    --accent-foreground: 161 89% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 88%;
+    --input: 40 15% 88%;
+    --ring: 158 65% 52%;
+
+    --radius: 0.75rem;
+
+    /* Custom TerraNova tokens */
+    --terra-forest: 161 89% 17%;
+    --terra-forest-light: 161 60% 25%;
+    --terra-neon: 158 65% 52%;
+    --terra-neon-glow: 158 80% 60%;
+    --terra-sand: 40 10% 96%;
+    --terra-sand-dark: 40 15% 88%;
+    --terra-warning: 38 92% 50%;
+    --terra-danger: 0 84% 60%;
+    --terra-info: 199 89% 48%;
+
+    /* Glassmorphism */
+    --glass-bg: 0 0% 100% / 0.7;
+    --glass-border: 0 0% 100% / 0.3;
+    --glass-blur: 12px;
+
+    /* Sidebar */
+    --sidebar-background: 161 89% 17%;
+    --sidebar-foreground: 40 10% 98%;
+    --sidebar-primary: 158 65% 52%;
+    --sidebar-primary-foreground: 161 89% 10%;
+    --sidebar-accent: 161 60% 25%;
+    --sidebar-accent-foreground: 40 10% 98%;
+    --sidebar-border: 161 60% 25%;
+    --sidebar-ring: 158 65% 52%;
+  }
+
+  .dark {
+    --background: 161 89% 8%;
+    --foreground: 40 10% 98%;
+
+    --card: 161 70% 12%;
+    --card-foreground: 40 10% 98%;
+
+    --popover: 161 70% 12%;
+    --popover-foreground: 40 10% 98%;
+
+    --primary: 158 65% 52%;
+    --primary-foreground: 161 89% 10%;
+
+    --secondary: 161 60% 20%;
+    --secondary-foreground: 40 10% 98%;
+
+    --muted: 161 50% 18%;
+    --muted-foreground: 40 10% 70%;
+
+    --accent: 158 65% 52%;
+    --accent-foreground: 161 89% 10%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 161 50% 20%;
+    --input: 161 50% 20%;
+    --ring: 158 65% 52%;
+
+    --sidebar-background: 161 89% 10%;
+    --sidebar-foreground: 40 10% 98%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  /* Glassmorphism Card */
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-xl border border-white/30 shadow-xl;
+  }
+
+  /* Bento Grid */
+  .bento-grid {
+    @apply grid gap-4;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  /* Market Ticker */
+  .ticker-scroll {
+    animation: ticker 30s linear infinite;
+  }
+
+  @keyframes ticker {
+    0% {
+      transform: translateX(0);
+    }
+    100% {
+      transform: translateX(-50%);
+    }
+  }
+
+  /* Gradient Text */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+  }
+
+  /* Neon Glow */
+  .neon-glow {
+    box-shadow: 0 0 20px hsl(var(--terra-neon) / 0.4),
+                0 0 40px hsl(var(--terra-neon) / 0.2);
+  }
+
+  /* Thumb-friendly button */
+  .btn-touch {
+    @apply min-h-[44px] px-6;
+  }
+
+  /* Active nav indicator */
+  .nav-active {
+    @apply bg-sidebar-accent text-sidebar-accent-foreground;
+  }
+
+  /* Scanning animation */
+  .scan-line {
+    animation: scan 2s ease-in-out infinite;
+  }
+
+  @keyframes scan {
+    0%, 100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    50% {
+      transform: translateY(100%);
+      opacity: 0.5;
+    }
+  }
+
+  /* Pulse dot */
+  .pulse-dot {
+    @apply relative;
+  }
+  
+  .pulse-dot::after {
+    content: '';
+    @apply absolute inset-0 rounded-full bg-accent animate-ping;
+  }
+
+  /* Waveform animation */
+  .waveform {
+    @apply flex items-end gap-1 h-8;
+  }
+
+  .waveform-bar {
+    @apply w-1 bg-accent rounded-full;
+    animation: waveform 1s ease-in-out infinite;
+  }
+
+  @keyframes waveform {
+    0%, 100% {
+      height: 20%;
+    }
+    50% {
+      height: 100%;
+    }
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text shadow for overlays */
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+}

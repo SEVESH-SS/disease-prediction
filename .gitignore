@@ -1,0 +1,4 @@
+.venv/
+agriroots-hub-main/node_modules
+backend/.env
+backend/venv_gpu
