@@ -34,8 +34,9 @@ const SmartPlanner = () => {
     p: "High",
     k: "Medium",
   });
-  const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const [locationStatus, setLocationStatus] = useState("Using Default Location");
+  const [userCoords, setUserCoords] = useState<number[] | null>(null);
 
   useEffect(() => {
     getUserLocation();
@@ -46,44 +47,32 @@ const SmartPlanner = () => {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          // Create a small bounding box around the user (approx 1km)
-          const bbox = [
-            latitude - 0.005,
-            longitude - 0.005,
-            latitude + 0.005,
-            longitude + 0.005
-          ];
+          const coords = [latitude, longitude];
+          setUserCoords(coords);
+          // Create a small bounding box
+          const bbox = [latitude - 0.005, longitude - 0.005, latitude + 0.005, longitude + 0.005];
           setLocationStatus("📍 Using Your Live Location");
-          fetchRecommendations(bbox);
+          fetchRecommendations(bbox, fieldData.soil);
         },
         (error) => {
           console.error("Location error:", error);
-          let errorMsg = "⚠️ Location Error";
-          if (error.code === 1) errorMsg = "⚠️ Permission Denied";
-          if (error.code === 2) errorMsg = "⚠️ Signal Unavailable";
-          if (error.code === 3) errorMsg = "⚠️ GPS Timeout";
-
-          setLocationStatus(errorMsg + " - Using Demo Farm");
-          fetchRecommendations(); // Fallback
+          setLocationStatus("⚠️ Location Error - Using Default");
+          fetchRecommendations(undefined, fieldData.soil);
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        }
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     } else {
       setLocationStatus("⚠️ Geolocation not supported");
-      fetchRecommendations();
+      fetchRecommendations(undefined, fieldData.soil);
     }
   };
 
-  const fetchRecommendations = async (customBox?: number[]) => {
+  const fetchRecommendations = async (customBox?: number[], soilType?: string) => {
     setLoading(true);
     setError(null);
 
-    // Default: Coimbatore Farm
     const boxToSend = customBox || [11.0168, 76.9558, 11.0268, 76.9658];
+    const targetSoil = soilType || fieldData.soil;
 
     try {
       const response = await fetch("http://localhost:8000/api/planner/recommend_satellite", {
@@ -91,7 +80,8 @@ const SmartPlanner = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           coords: boxToSend,
-          temperature: 28, // In future, fetch this from weather API based on coords
+          soil_type: targetSoil,
+          temperature: 28,
           humidity: 65,
           rainfall: 120
         }),
@@ -101,12 +91,13 @@ const SmartPlanner = () => {
       if (data.status === "success") {
         setFieldData({
           ...fieldData,
+          soil: data.soil_data.type || targetSoil,
           ph: data.soil_data.ph.toString(),
           n: data.soil_data.n > 100 ? "High" : data.soil_data.n > 50 ? "Medium" : "Low",
           p: data.soil_data.p > 50 ? "High" : data.soil_data.p > 20 ? "Medium" : "Low",
           k: data.soil_data.k > 40 ? "High" : data.soil_data.k > 10 ? "Medium" : "Low",
         });
-        setRecommendations(data.recommendations.slice(0, 3));
+        setRecommendations(data.recommendations);
       } else {
         setError(data.message || "Failed to fetch data");
       }
@@ -116,6 +107,14 @@ const SmartPlanner = () => {
       setLoading(false);
     }
   };
+
+  const handleSoilChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newSoil = e.target.value;
+    setFieldData(prev => ({ ...prev, soil: newSoil }));
+    const bbox = userCoords ? [userCoords[0] - 0.005, userCoords[1] - 0.005, userCoords[0] + 0.005, userCoords[1] + 0.005] : undefined;
+    fetchRecommendations(bbox, newSoil);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -236,19 +235,21 @@ const SmartPlanner = () => {
               )}
 
               {/* Map Labels */}
-              <div className="absolute top-4 left-4 bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium">
-                📍 Vijay's Farm, Coimbatore
+              <div className="absolute top-4 left-4 flex flex-col gap-2">
+                <div className="bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium border border-border/50">
+                  {locationStatus}
+                </div>
               </div>
 
               {/* Weather Mini Card */}
-              <div className="absolute top-4 right-4 bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-2">
+              <div className="absolute top-4 right-4 bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 flex items-center gap-2 border border-border/50">
                 <Cloud className="w-4 h-4 text-terra-info" />
                 <span className="text-sm font-medium">28°C</span>
               </div>
             </div>
 
             {/* Legend */}
-            <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3">
+            <div className="absolute bottom-4 left-4 bg-card/90 backdrop-blur-sm rounded-xl p-3 border border-border/50">
               <p className="text-xs font-medium mb-2">
                 {activeOverlay === "moisture" && "Soil Moisture Level"}
                 {activeOverlay === "ndvi" && "Vegetation Health (NDVI)"}
@@ -273,7 +274,7 @@ const SmartPlanner = () => {
           </div>
 
           {/* Overlay Controls */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          <div className="flex items-center justify-between gap-4 overflow-x-auto pb-2">
             <div className="flex items-center gap-2 bg-card rounded-xl p-1 border border-border">
               <Layers className="w-4 h-4 ml-2 text-muted-foreground" />
               {overlayOptions.map((option) => (
@@ -289,6 +290,23 @@ const SmartPlanner = () => {
                   {option.label}
                 </button>
               ))}
+            </div>
+
+            {/* Soil Selector */}
+            <div className="flex items-center gap-2 bg-card rounded-xl px-3 py-1 border border-border">
+              <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Soil Type:</span>
+              <select
+                value={fieldData.soil}
+                onChange={handleSoilChange}
+                className="bg-transparent text-sm font-bold focus:outline-none cursor-pointer py-1"
+              >
+                <option value="Red Loam">Red Loam</option>
+                <option value="Black Soil">Black Soil</option>
+                <option value="Alluvial">Alluvial</option>
+                <option value="Sandy">Sandy</option>
+                <option value="Clayey">Clayey</option>
+                <option value="Laterite">Laterite</option>
+              </select>
             </div>
           </div>
 
@@ -337,11 +355,11 @@ const SmartPlanner = () => {
                 <h2 className="font-semibold">AI Recommendations</h2>
               </div>
               <span className="text-xs px-2 py-1 bg-accent/10 text-accent rounded-full font-medium">
-                Based on analysis
+                {fieldData.soil}
               </span>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
               {loading ? (
                 <div className="py-20 text-center">
                   <motion.div
@@ -354,7 +372,7 @@ const SmartPlanner = () => {
               ) : error ? (
                 <div className="py-10 px-4 text-center bg-destructive/5 rounded-xl border border-destructive/10">
                   <p className="text-sm text-destructive mb-2">{error}</p>
-                  <Button variant="outline" size="sm" onClick={() => fetchRecommendations()}>
+                  <Button variant="outline" size="sm" onClick={() => getUserLocation()}>
                     Retry
                   </Button>
                 </div>
@@ -366,24 +384,24 @@ const SmartPlanner = () => {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.1 }}
                     whileHover={{ scale: 1.02 }}
-                    className="p-4 bg-secondary/50 rounded-xl cursor-pointer group"
+                    className="p-4 bg-secondary/30 rounded-xl cursor-pointer group border border-transparent hover:border-accent/20"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold capitalize">{rec.crop}</h3>
-                      <span className="text-accent font-bold">{Math.round(rec.score)}%</span>
+                      <h3 className="font-bold capitalize text-foreground">{rec.crop}</h3>
+                      <span className="text-accent text-sm font-black italic">{rec.suitability}% Match</span>
                     </div>
 
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-3">
                       <motion.div
                         initial={{ width: 0 }}
-                        animate={{ width: `${rec.score}%` }}
+                        animate={{ width: `${rec.suitability}%` }}
                         transition={{ duration: 1, delay: 0.3 + index * 0.1 }}
-                        className="h-full bg-gradient-to-r from-accent to-terra-neon-glow rounded-full"
+                        className="h-full bg-gradient-to-r from-accent via-terra-neon-glow to-terra-forest rounded-full shadow-[0_0_8px_rgba(34,197,94,0.3)]"
                       />
                     </div>
 
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Optimized for {rec.score > 80 ? "high" : "moderate"} yield based on current soil NPK.
+                    <p className="text-[13px] text-muted-foreground leading-relaxed">
+                      {rec.reason}
                     </p>
                   </motion.div>
                 ))
