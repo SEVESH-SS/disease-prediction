@@ -70,6 +70,8 @@ def fetch_spectral_bands(coords):
             "is_mock": True,
             "mock_reason": "No API Keys found. Simulating local soil profile."
         }
+    
+    print(f"✅ EXECUTING REAL SATELLITE FETCH: {coords}")
 
     bbox = BBox(bbox=coords, crs=CRS.WGS84)
     # 10m resolution for the center area

@@ -53,7 +53,16 @@ const SmartPlanner = () => {
             latitude + 0.005,
             longitude + 0.005
           ];
-          setLocationStatus("📍 Using Your Live Location");
+          // Fetch readable address name
+          fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`)
+            .then(res => res.json())
+            .then(data => {
+              const city = data.address.city || data.address.town || data.address.village || "Unknown Location";
+              const state = data.address.state || "";
+              setLocationStatus(`📍 ${city}, ${state}`);
+            })
+            .catch(() => setLocationStatus("📍 Using Your Live Location"));
+
           fetchRecommendations(bbox);
         },
         (error) => {
@@ -136,6 +145,9 @@ const SmartPlanner = () => {
             Digital twin of your field with AI recommendations
           </p>
         </div>
+        <Button variant="outline" onClick={getUserLocation}>
+          Refresh GPS
+        </Button>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -237,7 +249,7 @@ const SmartPlanner = () => {
 
               {/* Map Labels */}
               <div className="absolute top-4 left-4 bg-card/90 backdrop-blur-sm rounded-lg px-3 py-2 text-sm font-medium">
-                📍 Vijay's Farm, Coimbatore
+                {locationStatus}
               </div>
 
               {/* Weather Mini Card */}

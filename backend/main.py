@@ -1,21 +1,34 @@
-import io
 import os
-import datetime
+import io
 import traceback
-from typing import List
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from PIL import Image
-from pydantic import BaseModel
+import uvicorn
 import torch
-from torchvision import models, transforms
+import torch.nn.functional as F
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from transformers import AutoImageProcessor, AutoModelForImageClassification
+from PIL import Image
+from dotenv import load_dotenv
+from pydantic import BaseModel
+from typing import List
 
-# --- WINDOWS DLL STABILITY FIX ---
+# --- SATELLITE & PLANNER IMPORTS ---
+try:
+    from npk import recommend_crop, recommend_crop_from_satellite
+    from satellite_service import get_ndvi_for_area
+    PLANNER_ACTIVE = True
+except ImportError as e:
+    print(f"⚠️ Planner modules warning: {e}")
+    PLANNER_ACTIVE = False
+
+# Load Environment Variables
+load_dotenv()
+
+# Prevent WinError 127/DLL Crashes by trusting KMP
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
-print("Starting TerraNova AI Server (ResNet50 Edition)...")
-
-app = FastAPI(title="TerraNova Agricultural AI")
+# Initialize FastAPI
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,95 +38,115 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AI_READY = False
+# --- GLOBAL AI VARIABLES ---
+MODEL_ID = "wambugu71/crop_leaf_diseases_vit" 
+processor = None
 model = None
+AI_READY = False
 ENGINE_DEVICE = "cpu"
 
-# Standard ImageNet normalization for ResNet
-transform = transforms.Compose([
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
-
-# Simple mapping for demo purposes (ResNet gives 1000 classes)
-# In a real app we would fine-tune, but this proves the pipeline works securely
-def get_disease_from_label(label_idx):
-    # This is a placeholder logic to simulate disease detection
-    # since standard ResNet is trained on generic objects.
-    # We map generic classes to agricultural contexts for the demo.
-    return "Analyzing Leaf Patterns..."
+# --- EXPERT SYSTEM: TREATMENT LOGIC ---
+def get_treatment(disease_name):
+    d = disease_name.lower().replace("_", " ")
+    if "healthy" in d:
+        return "Plant is healthy. Maintain regular watering and monitoring."
+    
+    if "blight" in d:
+        return "Apply copper-based fungicides (e.g., Mancozeb). Remove infected leaves immediately to prevent spread."
+    if "rust" in d:
+        return "Apply sulfur-based fungicides. Improve air circulation by pruning excess foliage."
+    if "powdery mildew" in d:
+        return "Apply neem oil or potassium bicarbonate. Avoid overhead watering."
+    if "leaf spot" in d:
+        return "Use chlorothalonil or copper sprays. Remove debris from around the plant base."
+    if "mite" in d:
+        return "Spray with miticide or neem oil. Increase humidity around the plant."
+    if "virus" in d:
+        return "No cure for viruses. Remove and destroy the infected plant to protect others. Control aphids."
+    
+    return "Consult a local agronomist for specific treatment. Ensure proper drainage and soil nutrition."
 
 def initialize_ai_engine():
-    global model, ENGINE_DEVICE, AI_READY
+    global model, processor, ENGINE_DEVICE, AI_READY
+    
+    print("="*40)
+    print("      🌱 AGROLENS AI ENGINE INITALIZATION      ")
+    print("="*40)
+    
     try:
-        print("Loading Robust Computer Vision Model (ResNet50)...")
-        
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        ENGINE_DEVICE = device
-        
-        # Load a standard, robust vision model
-        # using the new 'weights' parameter instead of 'pretrained'
-        from torchvision.models import ResNet50_Weights
-        model = models.resnet50(weights=ResNet50_Weights.IMAGENET1K_V1).to(device)
-        model.eval()
+        ENGINE_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Selected Device: {ENGINE_DEVICE.upper()}")
+
+        print(f"Downloading/Loading Real AI Model: {MODEL_ID}...")
+        # Load Vision Transformer (Tiny & Fast)
+        processor = AutoImageProcessor.from_pretrained(MODEL_ID)
+        model = AutoModelForImageClassification.from_pretrained(MODEL_ID)
+        model.to(ENGINE_DEVICE)
         
         AI_READY = True
-        print(f"✅ AI ENGINE READY ON {ENGINE_DEVICE.upper()}")
+        print(f"✅ REAL AI MODEL LOADED: {MODEL_ID}")
+        print("Ready for live diagnosis.")
 
     except Exception as e:
         print(f"❌ AI ENGINE FAILURE: {e}")
         traceback.print_exc()
 
-# --- RUN ENGINE ---
+# Initialize on startup
 initialize_ai_engine()
 
-@app.post("/diagnose")
-async def diagnose_crop(file: UploadFile = File(...)):
-    if not AI_READY:
-        raise HTTPException(status_code=503, detail="AI Engine is initializing.")
-
-    try:
-        image_data = await file.read()
-        raw_image = Image.open(io.BytesIO(image_data)).convert("RGB")
-        
-        input_tensor = transform(raw_image).unsqueeze(0).to(ENGINE_DEVICE)
-        
-        with torch.no_grad():
-            output = model(input_tensor)
-            _, predicted_idx = torch.max(output, 1)
-        
-        # Simulate a smart response since we are using a generic model
-        # This confirms the pipeline is working 100%
-        return {
-            "disease": "Early Blight (Simulated)", # Placeholder for ResNet demo
-            "treatment": "Apply copper-based fungicide and ensure proper spacing between plants.",
-            "confidence": 92,
-            "severity": "medium"
-        }
-    except Exception as e:
-        print(f"Diagnosis Error: {e}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+@app.get("/")
+def home():
+    return {"message": "AgroLens AI Backend Online (Real Mode)"}
 
 @app.get("/health")
 async def health_check_ep():
     return {
         "status": "online", 
         "ai_ready": AI_READY,
-        "model": "ResNet50",
-        "device": ENGINE_DEVICE
+        "model": MODEL_ID,
+        "device": ENGINE_DEVICE,
+        "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "None"
     }
 
-# --- SATELLITE & PLANNER ENDPOINTS ---
-try:
-    from npk import recommend_crop, recommend_crop_from_satellite
-    from satellite_service import get_ndvi_for_area
-    PLANNER_ACTIVE = True
-except Exception as e:
-    print(f"Planner Load warning: {e}")
-    PLANNER_ACTIVE = False
+@app.post("/diagnose")
+async def diagnose_crop(file: UploadFile = File(...)):
+    if not AI_READY:
+        raise HTTPException(status_code=503, detail="AI Engine is initializing or failed.")
+
+    try:
+        # 1. Read Image
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        
+        # 2. Preprocess
+        inputs = processor(images=image, return_tensors="pt").to(ENGINE_DEVICE)
+        
+        # 3. Predict
+        with torch.no_grad():
+            outputs = model(**inputs)
+            logits = outputs.logits
+            
+        # 4. Decode
+        predicted_class_idx = logits.argmax(-1).item()
+        disease_label = model.config.id2label[predicted_class_idx]
+        confidence = float(F.softmax(logits, dim=1).max().item() * 100)
+        
+        # 5. Get Treatment
+        treatment_advice = get_treatment(disease_label)
+
+        print(f"🔍 DIAGNOSIS: {disease_label} ({confidence:.1f}%)")
+
+        return {
+            "disease": disease_label.replace("_", " "),
+            "treatment": treatment_advice,
+            "confidence": round(confidence, 1),
+            "severity": "High" if confidence > 85 and "healthy" not in disease_label.lower() else "Low"
+        }
+
+    except Exception as e:
+        print(f"Diagnosis Error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 class NPKSatelliteInput(BaseModel):
     coords: List[float]
@@ -126,11 +159,11 @@ async def get_satellite_recommendation(data: NPKSatelliteInput):
     if not PLANNER_ACTIVE:
          raise HTTPException(status_code=500, detail="Planner modules not loaded.")
     try:
+        # Just pass through to service
         result = recommend_crop_from_satellite(data.coords, data.temperature, data.humidity, data.rainfall)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
